@@ -3,3 +3,4 @@ Debug/
 .cproject
 .project
 frdmk64f_lwip_mqtt_freertos JLink Debug.launch
+Practica2_lwip_mqtt_freertos JLink Debug.launch
