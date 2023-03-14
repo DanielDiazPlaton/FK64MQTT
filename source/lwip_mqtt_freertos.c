@@ -34,6 +34,8 @@
 #include "ctype.h"
 #include "stdio.h"
 
+#include "states.h"
+
 #include "fsl_phyksz8081.h"
 #include "fsl_enet_mdio.h"
 #include "fsl_device_registers.h"
@@ -64,13 +66,21 @@
 #define EXAMPLE_CLOCK_FREQ CLOCK_GetFreq(kCLOCK_CoreSysClk)
 
 /* GPIO pin configuration. */
-#define BOARD_LED_GPIO       BOARD_LED_RED_GPIO
-#define BOARD_LED_GPIO_PIN   BOARD_LED_RED_GPIO_PIN
-#define BOARD_SW_GPIO        BOARD_SW3_GPIO
-#define BOARD_SW_GPIO_PIN    BOARD_SW3_GPIO_PIN
-#define BOARD_SW_PORT        BOARD_SW3_PORT
-#define BOARD_SW_IRQ         BOARD_SW3_IRQ
-#define BOARD_SW_IRQ_HANDLER BOARD_SW3_IRQ_HANDLER
+
+#define BOARD_SW_GPIO           BOARD_SW3_GPIO
+#define BOARD_SW_PORT           BOARD_SW3_PORT
+#define BOARD_SW_GPIO_PIN       BOARD_SW3_GPIO_PIN
+#define BOARD_SW_IRQ            BOARD_SW3_IRQ
+#define BOARD_SW_IRQ_HANDLER    BOARD_SW3_IRQ_HANDLER
+#define BOARD_SW_NAME           BOARD_SW3_NAME
+
+
+#define BOARD_SW_2_GPIO           BOARD_SW2_GPIO
+#define BOARD_SW_2_PORT           BOARD_SW2_PORT
+#define BOARD_SW_2_GPIO_PIN       BOARD_SW2_GPIO_PIN
+#define BOARD_SW_2_IRQ            BOARD_SW2_IRQ
+#define BOARD_SW_2_IRQ_HANDLER    BOARD_SW2_IRQ_HANDLER
+#define BOARD_SW_2_NAME           BOARD_SW2_NAME
 
 
 #ifndef EXAMPLE_NETIF_INIT_FN
@@ -79,10 +89,10 @@
 #endif /* EXAMPLE_NETIF_INIT_FN */
 
 /*! @brief MQTT server host name or IP address. */
-#define EXAMPLE_MQTT_SERVER_HOST "driver.cloudmqtt.com"
+#define EXAMPLE_MQTT_SERVER_HOST "u4ce60c4-internet-facing-8e1e13a023b05919.elb.us-east-1.amazonaws.com"
 
 /*! @brief MQTT server port number. */
-#define EXAMPLE_MQTT_SERVER_PORT 18591
+#define EXAMPLE_MQTT_SERVER_PORT 1883
 
 /*! @brief Stack size of the temporary lwIP initialization thread. */
 #define INIT_THREAD_STACKSIZE 1024
@@ -119,7 +129,7 @@ static char client_id[40];
 static const struct mqtt_connect_client_info_t mqtt_client_info = {
     .client_id   = (const char *)&client_id[0],
     .client_user = "Daniel",
-    .client_pass = "clase2023",
+    .client_pass = "communication",
     .keep_alive  = 100,
     .will_topic  = NULL,
     .will_msg    = NULL,
@@ -165,6 +175,7 @@ static void mqtt_incoming_publish_cb(void *arg, const char *topic, u32_t tot_len
     LWIP_UNUSED_ARG(arg);
 
     PRINTF("Received %u bytes from the topic \"%s\": \"", tot_len, topic);
+
 }
 
 /*!
@@ -180,7 +191,17 @@ static void mqtt_incoming_data_cb(void *arg, const u8_t *data, u16_t len, u8_t f
     {
         if (isprint(data[i]))
         {
-            PRINTF("%c", (char)data[i]);
+            PRINTF("%d", (char)data[i]);
+
+            if(data[i] == 65){
+                red();
+            }
+            if(data[i] == 66){
+                green();
+            }
+            if(data[i] == 67){
+                blue();
+            }
         }
         else
         {
@@ -199,7 +220,7 @@ static void mqtt_incoming_data_cb(void *arg, const u8_t *data, u16_t len, u8_t f
  */
 static void mqtt_subscribe_topics(mqtt_client_t *client)
 {
-    static const char *topics[] = {"lwip_topic/#", "lwip_other/#"};
+    static const char *topics[] = {"House/Led/#", "House/door/#"};
     int qos[]                   = {0, 1};
     err_t err;
     int i;
@@ -303,8 +324,20 @@ static void mqtt_message_published_cb(void *arg, err_t err)
  */
 static void publish_message(void *ctx)
 {
-    static const char *topic   = "lwip_topic/platon";
-    static const char *message = "Los amo <3";
+    static const char *topic   = "House/temperature";
+    static const char *message = "ON";
+
+    LWIP_UNUSED_ARG(ctx);
+
+    PRINTF("Going to publish to the topic \"%s\"...\r\n", topic);
+
+    mqtt_publish(mqtt_client, topic, message, strlen(message), 1, 0, mqtt_message_published_cb, (void *)topic);
+}
+
+static void publish_message2(void *ctx)
+{
+    static const char *topic   = "House/temperature";
+    static const char *message = "OFF";
 
     LWIP_UNUSED_ARG(ctx);
 
@@ -378,11 +411,26 @@ static void app_thread(void *arg)
     }
 
     /* Publish some messages */
-    for (i = 0; i < 5;)
+    if(GPIO_PinRead(BOARD_SW_GPIO, BOARD_SW_GPIO_PIN))
     {
         if (connected)
         {
             err = tcpip_callback(publish_message, NULL);
+            if (err != ERR_OK)
+            {
+                PRINTF("Failed to invoke publishing of a message on the tcpip_thread: %d.\r\n", err);
+            }
+            i++;
+        }
+
+        sys_msleep(1000U);
+    }
+
+    if(GPIO_PinRead(BOARD_SW_2_GPIO, BOARD_SW_2_GPIO_PIN))
+    {
+        if (connected)
+        {
+            err = tcpip_callback(publish_message2, NULL);
             if (err != ERR_OK)
             {
                 PRINTF("Failed to invoke publishing of a message on the tcpip_thread: %d.\r\n", err);
@@ -474,10 +522,23 @@ static void stack_init(void *arg)
  */
 int main(void)
 {
+
+    /* Define the init structure for the input switch pin */
+    gpio_pin_config_t sw_config = {
+        kGPIO_DigitalInput,
+        0,
+    };
+
     SYSMPU_Type *base = SYSMPU;
     BOARD_InitBootPins();
     BOARD_InitBootClocks();
     BOARD_InitDebugConsole();
+
+    init_states();
+
+    GPIO_PinInit(BOARD_SW_GPIO, BOARD_SW_GPIO_PIN, &sw_config);
+    GPIO_PinInit(BOARD_SW_2_GPIO, BOARD_SW_2_GPIO_PIN, &sw_config);
+
     /* Disable SYSMPU. */
     base->CESR &= ~SYSMPU_CESR_VLD_MASK;
 

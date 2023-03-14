@@ -80,6 +80,8 @@ void BOARD_InitPins(void)
     CLOCK_EnableClock(kCLOCK_PortB);
     /* Port C Clock Gate Control: Clock enabled */
     CLOCK_EnableClock(kCLOCK_PortC);
+    /* Port E Clock Gate Control: Clock enabled */
+    CLOCK_EnableClock(kCLOCK_PortE);
 
     /* PORTA12 (pin 42) is configured as RMII0_RXD1 */
     PORT_SetPinMux(PORTA, 12U, kPORT_MuxAlt4);
@@ -145,8 +147,14 @@ void BOARD_InitPins(void)
     /* PORTB17 (pin 63) is configured as UART0_TX */
     PORT_SetPinMux(PORTB, 17U, kPORT_MuxAlt3);
 
+    /* PORTB21 (pin 63) is configured as PTB21 */
+    PORT_SetPinMux(PORTB, 21U, kPORT_MuxAsGpio);
+
     /* PORTB22 (pin 68) is configured as PTB22 */
     PORT_SetPinMux(PORTB, 22U, kPORT_MuxAsGpio);
+
+    /* PORTC6 (pin ) is configured as PTC6 */
+    PORT_SetPinConfig(PORTC, 6U, &portb0_pin53_config);
 
     /* PORTC16 (pin 90) is configured as ENET0_1588_TMR0 */
     PORT_SetPinMux(PORTC, 16U, kPORT_MuxAlt4);
@@ -156,6 +164,9 @@ void BOARD_InitPins(void)
 
     /* PORTC18 (pin 92) is configured as ENET0_1588_TMR2 */
     PORT_SetPinMux(PORTC, 18U, kPORT_MuxAlt4);
+
+    /* PORTE26 (pin 68) is configured as PTB26 */
+    PORT_SetPinMux(PORTE, 26U, kPORT_MuxAsGpio);
 
     SIM->SOPT5 = ((SIM->SOPT5 &
                    /* Mask bits to zero which are setting */
